@@ -28,7 +28,7 @@ public class Repositories {
   private int repoIdUpperBound;
   private int threads;
 
-  private static final int REPOS_PER_CHUNK = 1000000;
+  private static final int REPOS_PER_CHUNK = 10000;
 
   private static Logger log = Logger.getLogger(Repositories.class);
 
@@ -48,7 +48,6 @@ public class Repositories {
     public RetrievalTask(String outputfile, int startid, int endid) {
       this.startid = startid;
       this.endid = endid;
-      System.out.println(outputfile);
       this.outputfile = new File(outputfile);
     }
 
@@ -80,7 +79,7 @@ public class Repositories {
           String next = result.getHeaders("Link")[0].getElements()[0]
               .toString();
           url = next.substring(next.indexOf("<") + 1, next.indexOf(">"));
-
+          log.debug(url);
           String json = EntityUtils.toString(result.getEntity(), "UTF-8");
           JsonElement jelement = new JsonParser().parse(json);
           JsonArray jarr = jelement.getAsJsonArray();
@@ -126,7 +125,6 @@ public class Repositories {
     for (int i = 0, startid = 0, endid = Math.min(REPOS_PER_CHUNK - 1,
         repoIdUpperBound); startid < repoIdUpperBound; i++, startid += REPOS_PER_CHUNK, endid = Math
             .min(endid + REPOS_PER_CHUNK, repoIdUpperBound)) {
-      System.out.println(startid + " " + endid);
 
       while (taskQueue.remainingCapacity() < 1) {
         try {
@@ -135,8 +133,10 @@ public class Repositories {
           // ok
         }
       }
-      ex.submit(new RetrievalTask(outputDir + File.separator + "repositories_"
-          + String.format("%05d", i), startid, endid));
+      String outfile = outputDir + File.separator + "repositories_"
+          + String.format("%05d", i);
+      log.info("#"+i + " [" + startid + "," + endid + "] > " + outfile);
+      ex.submit(new RetrievalTask(outfile, startid, endid));
     }
 
     ex.shutdown();
