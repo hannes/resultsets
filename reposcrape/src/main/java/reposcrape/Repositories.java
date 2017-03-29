@@ -28,7 +28,7 @@ public class Repositories {
   private int repoIdUpperBound;
   private int threads;
 
-  private static final int REPOS_PER_CHUNK = 10000;
+  private static final int REPOS_PER_CHUNK = 1000000;
 
   private static Logger log = Logger.getLogger(Repositories.class);
 
