@@ -101,7 +101,7 @@ public class Repositories {
                 + jo.get("fork").getAsString() + "\n").getBytes());
           }
 
-        } catch (IOException ex) {
+        } catch (Exception ex) {
           log.warn(ex.getMessage());
           try {
             Thread.sleep(1000);
@@ -119,7 +119,7 @@ public class Repositories {
   }
 
   public void retrieve() {
-    BlockingQueue<Runnable> taskQueue = new LinkedBlockingDeque<Runnable>(100);
+    BlockingQueue<Runnable> taskQueue = new LinkedBlockingDeque<Runnable>(1000);
     ExecutorService ex = new ThreadPoolExecutor(threads, threads,
         Integer.MAX_VALUE, TimeUnit.DAYS, taskQueue,
         new ThreadPoolExecutor.DiscardPolicy());
