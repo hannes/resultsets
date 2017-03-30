@@ -84,6 +84,7 @@ public class Repositories {
           JsonElement jelement = new JsonParser().parse(json);
           JsonArray jarr = jelement.getAsJsonArray();
           if (jarr.size() < 1) {
+            log.warn("Empty response: " + json);
             break;
           }
           for (int i = 0; i < jarr.size(); i++) {
