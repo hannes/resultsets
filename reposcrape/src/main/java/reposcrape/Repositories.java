@@ -75,7 +75,11 @@ public class Repositories {
           HttpGet request = new HttpGet(url);
           request.addHeader("content-type", "application/json");
           HttpResponse result = httpClient.execute(request);
-
+          if (result.getStatusLine().getStatusCode() != 200) {
+            throw new IOException(
+                "HTTP error " + result.getStatusLine().getStatusCode() + " ("
+                    + EntityUtils.toString(result.getEntity(), "UTF-8") + ")");
+          }
           String next = result.getHeaders("Link")[0].getElements()[0]
               .toString();
           url = next.substring(next.indexOf("<") + 1, next.indexOf(">"));
@@ -91,7 +95,8 @@ public class Repositories {
             JsonObject jo = (JsonObject) jarr.get(i);
 
             if (jo.get("id").getAsInt() > endid) {
-              log.info("Stopping at " + jo.get("id").getAsInt() + " (" + endid + ")");
+              log.info("Stopping at " + jo.get("id").getAsInt() + " (" + endid
+                  + ")");
               carry_on = false;
               break;
             }
