@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -61,11 +62,13 @@ public class Repositories {
           + "&since=" + startid;
       CloseableHttpClient httpClient = HttpClientBuilder.create().build();
       FileOutputStream out = null;
+      File outFile = null;
       boolean carry_on = true;
 
       try {
-        out = new FileOutputStream(outputfile);
-      } catch (FileNotFoundException e1) {
+        outFile = File.createTempFile("reposcrape", "tsv");
+        out = new FileOutputStream(outFile);
+      } catch (Exception e1) {
         log.error(e1.getMessage());
         return;
       }
@@ -95,8 +98,9 @@ public class Repositories {
             JsonObject jo = (JsonObject) jarr.get(i);
 
             if (jo.get("id").getAsInt() > endid) {
-              log.info("Stopping at " + jo.get("id").getAsInt() + " (" + endid
-                  + ")");
+              Files.move(outFile.toPath(), outputfile.toPath());
+              log.info(
+                  "Success at " + jo.get("id").getAsInt() + " (" + endid + ")");              
               carry_on = false;
               break;
             }
@@ -108,10 +112,6 @@ public class Repositories {
 
         } catch (Exception ex) {
           log.warn(ex.getMessage());
-          try {
-            Thread.sleep(1000);
-          } catch (InterruptedException e) {
-          }
         }
       }
       try {
