@@ -28,6 +28,10 @@ public class Main {
         .setLongFlag("threads").setStringParser(JSAP.INTEGER_PARSER)
         .setRequired(true).setHelp("Threads to use"));
 
+    jsap.registerParameter(new FlaggedOption("repos").setShortFlag('r')
+        .setLongFlag("repos").setStringParser(JSAP.INTEGER_PARSER)
+        .setRequired(true).setHelp("Repos per chunk"));
+
     JSAPResult res = jsap.parse(args);
 
     if (!res.success()) {
@@ -41,6 +45,7 @@ public class Main {
       System.exit(-1);
     }
     new Repositories(res.getString("output"), res.getString("apikey"),
-        res.getInt("upperbound"), res.getInt("threads")).retrieve();
+        res.getInt("upperbound"), res.getInt("threads"), res.getInt("repos"))
+            .retrieve();
   }
 }

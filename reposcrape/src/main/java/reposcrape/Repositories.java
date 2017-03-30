@@ -27,17 +27,17 @@ public class Repositories {
   private String apiKey;
   private int repoIdUpperBound;
   private int threads;
-
-  private static final int REPOS_PER_CHUNK = 1000000;
+  private int reposPerChunk;
 
   private static Logger log = Logger.getLogger(Repositories.class);
 
   public Repositories(String outputDir, String apiKey, int repoIdUpperBound,
-      int threads) {
+      int threads, int reposPerChunk) {
     this.outputDir = outputDir;
     this.apiKey = apiKey;
     this.repoIdUpperBound = repoIdUpperBound;
     this.threads = threads;
+    this.reposPerChunk = reposPerChunk;
   }
 
   private class RetrievalTask implements Runnable {
@@ -122,9 +122,9 @@ public class Repositories {
         Integer.MAX_VALUE, TimeUnit.DAYS, taskQueue,
         new ThreadPoolExecutor.DiscardPolicy());
 
-    for (int i = 0, startid = 0, endid = Math.min(REPOS_PER_CHUNK - 1,
-        repoIdUpperBound); startid < repoIdUpperBound; i++, startid += REPOS_PER_CHUNK, endid = Math
-            .min(endid + REPOS_PER_CHUNK, repoIdUpperBound)) {
+    for (int i = 0, startid = 0, endid = Math.min(reposPerChunk - 1,
+        repoIdUpperBound); startid < repoIdUpperBound; i++, startid += reposPerChunk, endid = Math
+            .min(endid + reposPerChunk, repoIdUpperBound)) {
 
       while (taskQueue.remainingCapacity() < 1) {
         try {
@@ -135,7 +135,7 @@ public class Repositories {
       }
       String outfile = outputDir + File.separator + "repositories_"
           + String.format("%05d", i);
-      log.info("#"+i + " [" + startid + "," + endid + "] > " + outfile);
+      log.info("#" + i + " [" + startid + "," + endid + "] > " + outfile);
       ex.submit(new RetrievalTask(outfile, startid, endid));
     }
 
