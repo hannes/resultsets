@@ -91,6 +91,7 @@ public class Repositories {
             JsonObject jo = (JsonObject) jarr.get(i);
 
             if (jo.get("id").getAsInt() > endid) {
+              log.info("Stopping at " + jo.get("id").getAsInt() + " (" + endid + ")");
               carry_on = false;
               break;
             }
