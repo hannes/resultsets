@@ -1,5 +1,6 @@
 package reposcrape;
 
+import java.util.Arrays;
 import java.util.Iterator;
 
 import com.martiansoftware.jsap.FlaggedOption;
@@ -16,7 +17,8 @@ public class Main {
         .setLongFlag("output").setStringParser(JSAP.STRING_PARSER)
         .setRequired(true).setHelp("Output directory"));
 
-    jsap.registerParameter(new FlaggedOption("apikey").setShortFlag('a')
+    jsap.registerParameter(new FlaggedOption("apikey")
+        .setAllowMultipleDeclarations(true).setShortFlag('a')
         .setLongFlag("apikey").setStringParser(JSAP.STRING_PARSER)
         .setRequired(true).setHelp("Github API key"));
 
@@ -44,8 +46,8 @@ public class Main {
           "Usage: " + jsap.getUsage() + "\nParameters: " + jsap.getHelp());
       System.exit(-1);
     }
-    new Repositories(res.getString("output"), res.getString("apikey"),
-        res.getInt("upperbound"), res.getInt("threads"), res.getInt("repos"))
-            .retrieve();
+    new Repositories(res.getString("output"),
+        Arrays.asList(res.getStringArray("apikey")), res.getInt("upperbound"),
+        res.getInt("threads"), res.getInt("repos")).retrieve();
   }
 }

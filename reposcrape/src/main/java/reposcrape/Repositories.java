@@ -1,10 +1,10 @@
 package reposcrape;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -25,17 +25,17 @@ import com.google.gson.JsonParser;
 
 public class Repositories {
   private String outputDir;
-  private String apiKey;
+  private List<String> apiKeys;
   private int repoIdUpperBound;
   private int threads;
   private int reposPerChunk;
 
   private static Logger log = Logger.getLogger(Repositories.class);
 
-  public Repositories(String outputDir, String apiKey, int repoIdUpperBound,
-      int threads, int reposPerChunk) {
+  public Repositories(String outputDir, List<String> apiKeys,
+      int repoIdUpperBound, int threads, int reposPerChunk) {
     this.outputDir = outputDir;
-    this.apiKey = apiKey;
+    this.apiKeys = apiKeys;
     this.repoIdUpperBound = repoIdUpperBound;
     this.threads = threads;
     this.reposPerChunk = reposPerChunk;
@@ -45,11 +45,14 @@ public class Repositories {
     private int startid;
     private int endid;
     private File outputfile;
+    private String apiKey;
 
-    public RetrievalTask(String outputfile, int startid, int endid) {
+    public RetrievalTask(String outputfile, String apiKey, int startid,
+        int endid) {
       this.startid = startid;
       this.endid = endid;
       this.outputfile = new File(outputfile);
+      this.apiKey = apiKey;
     }
 
     public void run() {
@@ -100,7 +103,7 @@ public class Repositories {
             if (jo.get("id").getAsInt() > endid) {
               Files.move(outFile.toPath(), outputfile.toPath());
               log.info(
-                  "Success at " + jo.get("id").getAsInt() + " (" + endid + ")");              
+                  "Success at " + jo.get("id").getAsInt() + " (" + endid + ")");
               carry_on = false;
               break;
             }
@@ -143,7 +146,8 @@ public class Repositories {
       String outfile = outputDir + File.separator + "repositories_"
           + String.format("%05d", i);
       log.info("#" + i + " [" + startid + "," + endid + "] > " + outfile);
-      ex.submit(new RetrievalTask(outfile, startid, endid));
+      ex.submit(new RetrievalTask(outfile, apiKeys.get(i % apiKeys.size()),
+          startid, endid));
     }
 
     ex.shutdown();
