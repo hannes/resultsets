@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -103,6 +104,14 @@ public class ResultSets {
 
       } catch (Exception e) {
         log.error(e.getMessage());
+        try {
+          Thread.sleep(1000 * 60);
+        } catch (InterruptedException e1) {
+          // TODO Auto-generated catch block
+          e1.printStackTrace();
+        }
+        // try again?!
+        payload(httpClient, reposInQ, apiKey, out);
       }
     }
 
@@ -112,7 +121,6 @@ public class ResultSets {
         log.info("Skipping chunk, output file exists " + outputfile);
         return;
       }
-      // actual payload
       CloseableHttpClient httpClient = HttpClientBuilder.create().build();
       FileOutputStream out = null;
       File outFile = null;
@@ -120,19 +128,12 @@ public class ResultSets {
       try {
         outFile = File.createTempFile("reposcrape", "tsv");
         out = new FileOutputStream(outFile);
-      } catch (Exception e1) {
-        log.error(e1.getMessage());
-        return;
-      }
-
-      try {
         // oh, java...
         BufferedReader isr = new BufferedReader(
             new InputStreamReader(new FileInputStream(inputfile)));
         Collection<String> reposInQ = new ArrayList<String>();
 
         String line = null;
-        int i = 0;
         while ((line = isr.readLine()) != null) {
           if (line.trim().equals("")) {
             continue;
@@ -145,14 +146,15 @@ public class ResultSets {
           String reponame = linep[1];
           reposInQ.add(reponame);
           if (reposInQ.size() >= reposPerChunk) {
-            payload(httpClient, reposInQ, apiKeys.get(i % apiKeys.size()), out);
+            payload(httpClient, reposInQ,
+                apiKeys.get(new Random().nextInt(apiKeys.size())), out);
             reposInQ.clear();
           }
-          i++;
         }
         // don't forget, stuff in the back
         if (reposInQ.size() > 0) {
-          payload(httpClient, reposInQ, apiKeys.get(i % apiKeys.size()), out);
+          payload(httpClient, reposInQ,
+              apiKeys.get(new Random().nextInt(apiKeys.size())), out);
         }
 
         Files.move(outFile.toPath(), outputfile.toPath());
