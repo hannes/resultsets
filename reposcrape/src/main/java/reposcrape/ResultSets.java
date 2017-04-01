@@ -95,8 +95,8 @@ public class ResultSets {
               .getAsJsonObject();
           String repoName = repo.get("full_name").getAsString();
           String repoId = repo.get("id").getAsString();
-          log.info(repoName);
           if (!seenIds.contains(repoId)) {
+            log.info(repoName);
             out.write((repoId + "\t" + repoName + "\n").getBytes());
           }
           seenIds.add(repoId);
