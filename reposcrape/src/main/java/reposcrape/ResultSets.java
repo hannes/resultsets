@@ -105,7 +105,7 @@ public class ResultSets {
       } catch (Exception e) {
         log.error(e.getMessage());
         try {
-          Thread.sleep(1000 * 60);
+          Thread.sleep(1000 * 60*5);
         } catch (InterruptedException e1) {
           // TODO Auto-generated catch block
           e1.printStackTrace();
