@@ -94,7 +94,8 @@ public class Repositories {
           JsonElement jelement = new JsonParser().parse(json);
           JsonArray jarr = jelement.getAsJsonArray();
           if (jarr.size() < 1) {
-            log.warn("Empty response: " + json);
+            Files.move(outFile.toPath(), outputfile.toPath());
+            log.info("Empty response: " + json);
             break;
           }
           for (int i = 0; i < jarr.size(); i++) {
