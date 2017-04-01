@@ -67,7 +67,7 @@ public class ResultSets {
 
     private void payload(HttpClient httpClient, Collection<String> reposInQ,
         String apiKey, OutputStream out) {
-      String url = "https://api.github.com/search/code?api_key=" + apiKey
+      String url = "https://api.github.com/search/code?access_token=" + apiKey
           + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false";
       for (String r : reposInQ) {
         url += "+repo:" + r;
@@ -107,6 +107,7 @@ public class ResultSets {
     }
 
     public void run() {
+      log.info(inputfile);
       if (outputfile.exists() && outputfile.length() > 0) {
         log.info("Skipping chunk, output file exists " + outputfile);
         return;
