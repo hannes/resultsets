@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -22,6 +24,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.martiansoftware.jsap.FlaggedOption;
+import com.martiansoftware.jsap.JSAP;
+import com.martiansoftware.jsap.JSAPException;
+import com.martiansoftware.jsap.JSAPResult;
 
 public class Repositories {
   private String outputDir;
@@ -157,6 +163,47 @@ public class Repositories {
     } catch (InterruptedException e) {
       // ok
     }
+  }
+
+  public static void main(String[] args) throws JSAPException {
+    JSAP jsap = new JSAP();
+
+    jsap.registerParameter(new FlaggedOption("output").setShortFlag('o')
+        .setLongFlag("output").setStringParser(JSAP.STRING_PARSER)
+        .setRequired(true).setHelp("Output directory"));
+
+    jsap.registerParameter(new FlaggedOption("apikey")
+        .setAllowMultipleDeclarations(true).setShortFlag('a')
+        .setLongFlag("apikey").setStringParser(JSAP.STRING_PARSER)
+        .setRequired(true).setHelp("Github API key"));
+
+    jsap.registerParameter(new FlaggedOption("upperbound").setShortFlag('u')
+        .setLongFlag("upperbound").setStringParser(JSAP.INTEGER_PARSER)
+        .setRequired(true).setHelp("Github repository ID upper bound"));
+
+    jsap.registerParameter(new FlaggedOption("threads").setShortFlag('t')
+        .setLongFlag("threads").setStringParser(JSAP.INTEGER_PARSER)
+        .setRequired(true).setHelp("Threads to use"));
+
+    jsap.registerParameter(new FlaggedOption("repos").setShortFlag('r')
+        .setLongFlag("repos").setStringParser(JSAP.INTEGER_PARSER)
+        .setRequired(true).setHelp("Repos per chunk"));
+
+    JSAPResult res = jsap.parse(args);
+
+    if (!res.success()) {
+      @SuppressWarnings("rawtypes")
+      Iterator errs = res.getErrorMessageIterator();
+      while (errs.hasNext()) {
+        System.err.println(errs.next());
+      }
+      System.err.println(
+          "Usage: " + jsap.getUsage() + "\nParameters: " + jsap.getHelp());
+      System.exit(-1);
+    }
+    new Repositories(res.getString("output"),
+        Arrays.asList(res.getStringArray("apikey")), res.getInt("upperbound"),
+        res.getInt("threads"), res.getInt("repos")).retrieve();
   }
 
 }
