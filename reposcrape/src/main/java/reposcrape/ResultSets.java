@@ -43,36 +43,29 @@ public class ResultSets {
   private String inputDir;
   private List<String> apiKeys;
   private int threads;
-  private int reposPerChunk;
 
   private static Logger log = Logger.getLogger(ResultSets.class);
 
   public ResultSets(String inputDir, String outputDir, List<String> apiKeys,
-      int threads, int reposPerChunk) {
+      int threads) {
     this.outputDir = outputDir;
     this.inputDir = inputDir;
-
     this.apiKeys = apiKeys;
     this.threads = threads;
-    this.reposPerChunk = reposPerChunk;
   }
 
   private class RetrievalTask implements Runnable {
     private File inputfile;
     private File outputfile;
 
+    private static final int REQUEST_LENGTH = 7000;
+
     public RetrievalTask(File infile, File outfile) {
       this.inputfile = infile;
       this.outputfile = outfile;
     }
 
-    private void payload(HttpClient httpClient, Collection<String> reposInQ,
-        String apiKey, OutputStream out) {
-      String url = "https://api.github.com/search/code?access_token=" + apiKey
-          + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false";
-      for (String r : reposInQ) {
-        url += "+repo:" + r;
-      }
+    private void payload(HttpClient httpClient, String url, OutputStream out) {
       HttpGet request = new HttpGet(url);
       request.addHeader("content-type", "application/json");
       try {
@@ -105,13 +98,13 @@ public class ResultSets {
       } catch (Exception e) {
         log.error(e.getMessage());
         try {
-          Thread.sleep(1000 * 60*5);
+          Thread.sleep(1000 * 60 * 5);
         } catch (InterruptedException e1) {
           // TODO Auto-generated catch block
           e1.printStackTrace();
         }
         // try again?!
-        payload(httpClient, reposInQ, apiKey, out);
+        payload(httpClient, url, out);
       }
     }
 
@@ -131,8 +124,7 @@ public class ResultSets {
         // oh, java...
         BufferedReader isr = new BufferedReader(
             new InputStreamReader(new FileInputStream(inputfile)));
-        Collection<String> reposInQ = new ArrayList<String>();
-
+        String repos = "";
         String line = null;
         while ((line = isr.readLine()) != null) {
           if (line.trim().equals("")) {
@@ -143,18 +135,24 @@ public class ResultSets {
           if (linep[2] == "true") {
             continue;
           }
-          String reponame = linep[1];
-          reposInQ.add(reponame);
-          if (reposInQ.size() >= reposPerChunk) {
-            payload(httpClient, reposInQ,
-                apiKeys.get(new Random().nextInt(apiKeys.size())), out);
-            reposInQ.clear();
+          repos += "+repo:" + linep[1];
+
+          if (repos.length() + 147 > REQUEST_LENGTH) {
+            String url = "https://api.github.com/search/code?access_token="
+                + apiKeys.get(new Random().nextInt(apiKeys.size()))
+                + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false"
+                + repos;
+            payload(httpClient, url, out);
+            repos = "";
           }
         }
         // don't forget, stuff in the back
-        if (reposInQ.size() > 0) {
-          payload(httpClient, reposInQ,
-              apiKeys.get(new Random().nextInt(apiKeys.size())), out);
+        if (repos.length() > 0) {
+          String url = "https://api.github.com/search/code?access_token="
+              + apiKeys.get(new Random().nextInt(apiKeys.size()))
+              + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false"
+              + repos;
+          payload(httpClient, url, out);
         }
 
         Files.move(outFile.toPath(), outputfile.toPath());
@@ -221,11 +219,7 @@ public class ResultSets {
 
     jsap.registerParameter(new FlaggedOption("threads").setShortFlag('t')
         .setLongFlag("threads").setStringParser(JSAP.INTEGER_PARSER)
-        .setRequired(true).setHelp("Threads to use (probably 2)"));
-
-    jsap.registerParameter(new FlaggedOption("repos").setShortFlag('r')
-        .setLongFlag("repos").setStringParser(JSAP.INTEGER_PARSER)
-        .setRequired(true).setHelp("Repos per chunk"));
+        .setRequired(true).setHelp("Threads to use (probably 1)"));
 
     JSAPResult res = jsap.parse(args);
 
@@ -240,8 +234,8 @@ public class ResultSets {
       System.exit(-1);
     }
     new ResultSets(res.getString("input"), res.getString("output"),
-        Arrays.asList(res.getStringArray("apikey")), res.getInt("threads"),
-        res.getInt("repos")).retrieve();
+        Arrays.asList(res.getStringArray("apikey")), res.getInt("threads"))
+            .retrieve();
   }
 
 }
