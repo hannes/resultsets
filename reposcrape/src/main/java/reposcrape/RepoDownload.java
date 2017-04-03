@@ -6,14 +6,12 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.nio.file.Files;
-import java.util.ArrayList;
+import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -29,28 +27,21 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.martiansoftware.jsap.FlaggedOption;
 import com.martiansoftware.jsap.JSAP;
 import com.martiansoftware.jsap.JSAPException;
 import com.martiansoftware.jsap.JSAPResult;
 
-public class ResultSets {
+public class RepoDownload {
   private String outputDir;
   private String inputDir;
-  private List<String> apiKeys;
   private int threads;
 
-  private static Logger log = Logger.getLogger(ResultSets.class);
+  private static Logger log = Logger.getLogger(RepoDownload.class);
 
-  public ResultSets(String inputDir, String outputDir, List<String> apiKeys,
-      int threads) {
+  public RepoDownload(String inputDir, String outputDir, int threads) {
     this.outputDir = outputDir;
     this.inputDir = inputDir;
-    this.apiKeys = apiKeys;
     this.threads = threads;
   }
 
@@ -65,9 +56,8 @@ public class ResultSets {
       this.outputfile = outfile;
     }
 
-    private void payload(HttpClient httpClient, String url, OutputStream out) {
+    private void payload(HttpClient httpClient, String url, File out) {
       HttpGet request = new HttpGet(url);
-      request.addHeader("content-type", "application/json");
       try {
         HttpResponse result = httpClient.execute(request);
         if (result.getStatusLine().getStatusCode() != 200) {
@@ -75,26 +65,14 @@ public class ResultSets {
               "HTTP error " + result.getStatusLine().getStatusCode() + " ("
                   + EntityUtils.toString(result.getEntity(), "UTF-8") + ")");
         }
-        String json = EntityUtils.toString(result.getEntity(), "UTF-8");
-        JsonElement jelement = new JsonParser().parse(json);
-        JsonObject jobject = jelement.getAsJsonObject();
-        if (jobject.get("incomplete_results").getAsBoolean()) {
-          log.warn("incomplete results :(");
-        }
-        JsonArray items = jobject.get("items").getAsJsonArray();
-        Collection<String> seenIds = new ArrayList<String>();
-        for (JsonElement jo : items) {
-          JsonObject repo = jo.getAsJsonObject().get("repository")
-              .getAsJsonObject();
-          String repoName = repo.get("full_name").getAsString();
-          String repoId = repo.get("id").getAsString();
-          if (!seenIds.contains(repoId)) {
-            log.info(repoName);
-            out.write((repoId + "\t" + repoName + "\n").getBytes());
-          }
-          seenIds.add(repoId);
-        }
 
+        InputStream is = result.getEntity().getContent();
+        FileOutputStream fos = new FileOutputStream(out);
+        int inByte;
+        while ((inByte = is.read()) != -1)
+          fos.write(inByte);
+        is.close();
+        fos.close();
       } catch (Exception e) {
         log.error(e.getMessage());
         try {
@@ -115,50 +93,28 @@ public class ResultSets {
         return;
       }
       CloseableHttpClient httpClient = HttpClientBuilder.create().build();
-      FileOutputStream out = null;
-      File outFile = null;
-
       try {
-        outFile = File.createTempFile("reposcrape", "tsv");
-        out = new FileOutputStream(outFile);
         // oh, java...
         BufferedReader isr = new BufferedReader(
             new InputStreamReader(new FileInputStream(inputfile)));
-        String repos = "";
         String line = null;
         while ((line = isr.readLine()) != null) {
           if (line.trim().equals("")) {
             continue;
           }
           String[] linep = line.split("\t");
-          // skip forks
-          if (linep[2] == "true") {
+          String reponame = linep[1];
+
+          File outputfile = Paths.get(outputDir, reponame.replaceAll("/", "_"))
+              .toFile();
+          if (outputfile.exists() && outputfile.length() > 0) {
             continue;
           }
-          repos += "+repo:" + linep[1];
-
-          if (repos.length() + 147 > REQUEST_LENGTH) {
-            String url = "https://api.github.com/search/code?access_token="
-                + apiKeys.get(new Random().nextInt(apiKeys.size()))
-                + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false"
-                + repos;
-            payload(httpClient, url, out);
-            repos = "";
-          }
+          payload(httpClient,
+              "https://github.com/" + reponame + "/archive/master.zip",
+              outputfile);
         }
-        // don't forget, stuff in the back
-        if (repos.length() > 0) {
-          String url = "https://api.github.com/search/code?access_token="
-              + apiKeys.get(new Random().nextInt(apiKeys.size()))
-              + "&sort=indexed&q=ResultSet+language:Java+in:file+fork:false"
-              + repos;
-          payload(httpClient, url, out);
-        }
-
-        Files.move(outFile.toPath(), outputfile.toPath());
-
         isr.close();
-        out.close();
       } catch (IOException e) {
         log.warn(e.getMessage());
       }
@@ -212,11 +168,6 @@ public class ResultSets {
         .setLongFlag("input").setStringParser(JSAP.STRING_PARSER)
         .setRequired(true).setHelp("Input directory"));
 
-    jsap.registerParameter(new FlaggedOption("apikey")
-        .setAllowMultipleDeclarations(true).setShortFlag('a')
-        .setLongFlag("apikey").setStringParser(JSAP.STRING_PARSER)
-        .setRequired(true).setHelp("Github API key (need many)"));
-
     jsap.registerParameter(new FlaggedOption("threads").setShortFlag('t')
         .setLongFlag("threads").setStringParser(JSAP.INTEGER_PARSER)
         .setRequired(true).setHelp("Threads to use (probably 1)"));
@@ -233,9 +184,8 @@ public class ResultSets {
           "Usage: " + jsap.getUsage() + "\nParameters: " + jsap.getHelp());
       System.exit(-1);
     }
-    new ResultSets(res.getString("input"), res.getString("output"),
-        Arrays.asList(res.getStringArray("apikey")), res.getInt("threads"))
-            .retrieve();
+    new RepoDownload(res.getString("input"), res.getString("output"),
+        res.getInt("threads")).retrieve();
   }
 
 }
