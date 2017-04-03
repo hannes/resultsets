@@ -8,11 +8,8 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -47,16 +44,13 @@ public class RepoDownload {
 
   private class RetrievalTask implements Runnable {
     private File inputfile;
-    private File outputfile;
 
-    private static final int REQUEST_LENGTH = 6500;
-
-    public RetrievalTask(File infile, File outfile) {
+    public RetrievalTask(File infile) {
       this.inputfile = infile;
-      this.outputfile = outfile;
     }
 
     private void payload(HttpClient httpClient, String url, File out) {
+      log.info(url);
       HttpGet request = new HttpGet(url);
       try {
         HttpResponse result = httpClient.execute(request);
@@ -88,10 +82,6 @@ public class RepoDownload {
 
     public void run() {
       log.info(inputfile);
-      if (outputfile.exists() && outputfile.length() > 0) {
-        log.info("Skipping chunk, output file exists " + outputfile);
-        return;
-      }
       CloseableHttpClient httpClient = HttpClientBuilder.create().build();
       try {
         // oh, java...
@@ -104,8 +94,7 @@ public class RepoDownload {
           }
           String[] linep = line.split("\t");
           String reponame = linep[1];
-
-          File outputfile = Paths.get(outputDir, reponame.replaceAll("/", "_"))
+          File outputfile = Paths.get(outputDir, linep[0] + "__" + reponame.replaceAll("/", "__") + ".zip")
               .toFile();
           if (outputfile.exists() && outputfile.length() > 0) {
             continue;
@@ -131,7 +120,7 @@ public class RepoDownload {
     File inputDirF = new File(inputDir);
     for (File infile : inputDirF.listFiles(new FilenameFilter() {
       public boolean accept(File dir, String name) {
-        return name.matches("repositories_\\d+");
+        return name.matches("resultsets_\\d+");
       }
     })) {
       while (taskQueue.remainingCapacity() < 1) {
@@ -142,11 +131,7 @@ public class RepoDownload {
         }
       }
 
-      File outfile = new File(outputDir + File.separator
-          + infile.getName().replace("repositories", "resultsets"));
-
-      log.info(outfile);
-      ex.submit(new RetrievalTask(infile, outfile));
+      ex.submit(new RetrievalTask(infile));
     }
 
     ex.shutdown();
