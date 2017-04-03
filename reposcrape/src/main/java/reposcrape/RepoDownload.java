@@ -8,6 +8,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
@@ -52,7 +53,11 @@ public class RepoDownload {
     private void payload(HttpClient httpClient, String url, File out) {
       log.info(url);
       HttpGet request = new HttpGet(url);
+
       try {
+
+        File tempOut = File.createTempFile("reposcrape", "zip");
+
         HttpResponse result = httpClient.execute(request);
         if (result.getStatusLine().getStatusCode() != 200) {
           throw new IOException(
@@ -61,12 +66,15 @@ public class RepoDownload {
         }
 
         InputStream is = result.getEntity().getContent();
-        FileOutputStream fos = new FileOutputStream(out);
+        FileOutputStream fos = new FileOutputStream(tempOut);
         int inByte;
         while ((inByte = is.read()) != -1)
           fos.write(inByte);
         is.close();
         fos.close();
+
+        Files.move(tempOut.toPath(), out.toPath());
+
       } catch (Exception e) {
         log.error(e.getMessage());
         try {
@@ -94,7 +102,9 @@ public class RepoDownload {
           }
           String[] linep = line.split("\t");
           String reponame = linep[1];
-          File outputfile = Paths.get(outputDir, linep[0] + "__" + reponame.replaceAll("/", "__") + ".zip")
+          File outputfile = Paths
+              .get(outputDir,
+                  linep[0] + "__" + reponame.replaceAll("/", "__") + ".zip")
               .toFile();
           if (outputfile.exists() && outputfile.length() > 0) {
             continue;
