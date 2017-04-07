@@ -21,22 +21,19 @@ import com.martiansoftware.jsap.JSAPException;
 import com.martiansoftware.jsap.JSAPResult;
 
 public class RepoFilter {
-  private String outputDir;
+  private String pattern;
   private String inputDir;
   private int threads;
 
-  private int maven = 0;
-  private int ivy = 0;
-  private int ant = 0;
+  private int matches = 0;
   private int total = 0;
 
   private static Logger log = Logger.getLogger(RepoFilter.class);
 
-  public RepoFilter(String inputDir, String outputDir, int threads) {
-    this.outputDir = outputDir;
+  public RepoFilter(String inputDir, String pattern, int threads) {
     this.inputDir = inputDir;
     this.threads = threads;
-
+    this.pattern = pattern;
   }
 
   private class FilterTask implements Runnable {
@@ -47,18 +44,17 @@ public class RepoFilter {
     }
 
     public void run() {
-      log.info(inputfile);
+      log.debug(inputfile);
       total++;
       try {
         ZipFile zipFile = new ZipFile(inputfile);
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
         while (entries.hasMoreElements()) {
           ZipEntry entry = entries.nextElement();
-        //  log.info(entry.getName());
-          if (entry.getName().endsWith("pom.xml")) {
-            maven++;
-          }if (entry.getName().endsWith("build.xml")) {
-            ant++;
+          // log.info(entry.getName());
+          if (entry.getName().matches(pattern)) {
+            matches++;
+            break;
           }
           // InputStream stream = zipFile.getInputStream(entry);
         }
@@ -97,8 +93,7 @@ public class RepoFilter {
     ex.shutdown();
     try {
       ex.awaitTermination(Integer.MAX_VALUE, TimeUnit.DAYS);
-      log.info("Total: " + total + ", Maven: " + maven + ", Ivy:" + ivy
-          + ", Ant: " + ant);
+      log.info("Total: " + total + ", Matches: " + matches);
     } catch (InterruptedException e) {
       // ok
     }
@@ -107,9 +102,9 @@ public class RepoFilter {
   public static void main(String[] args) throws JSAPException {
     JSAP jsap = new JSAP();
 
-    jsap.registerParameter(new FlaggedOption("output").setShortFlag('o')
-        .setLongFlag("output").setStringParser(JSAP.STRING_PARSER)
-        .setRequired(true).setHelp("Output directory"));
+    jsap.registerParameter(new FlaggedOption("pattern").setShortFlag('p')
+        .setLongFlag("pattern").setStringParser(JSAP.STRING_PARSER)
+        .setRequired(true).setHelp("Filename regex"));
 
     jsap.registerParameter(new FlaggedOption("input").setShortFlag('i')
         .setLongFlag("input").setStringParser(JSAP.STRING_PARSER)
@@ -131,7 +126,7 @@ public class RepoFilter {
           "Usage: " + jsap.getUsage() + "\nParameters: " + jsap.getHelp());
       System.exit(-1);
     }
-    new RepoFilter(res.getString("input"), res.getString("output"),
+    new RepoFilter(res.getString("input"), res.getString("pattern"),
         res.getInt("threads")).retrieve();
   }
 
