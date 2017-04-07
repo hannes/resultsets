@@ -8,6 +8,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Iterator;
@@ -50,13 +51,28 @@ public class RepoDownload {
       this.inputfile = infile;
     }
 
+    private void copyInputStreamToFile(InputStream in, File file) {
+      try {
+        OutputStream out = new FileOutputStream(file);
+        byte[] buf = new byte[16 * 1024];
+        int len;
+        while ((len = in.read(buf)) > 0) {
+          out.write(buf, 0, len);
+        }
+        out.close();
+        in.close();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
+
     private void payload(HttpClient httpClient, String url, File out) {
       log.info(url);
       HttpGet request = new HttpGet(url);
 
       try {
 
-        File tempOut = File.createTempFile("reposcrape", "zip");
+        File tempOut = File.createTempFile("reposcrape", ".zip");
 
         HttpResponse result = httpClient.execute(request);
         if (result.getStatusLine().getStatusCode() != 200) {
@@ -66,25 +82,10 @@ public class RepoDownload {
         }
 
         InputStream is = result.getEntity().getContent();
-        FileOutputStream fos = new FileOutputStream(tempOut);
-        int inByte;
-        while ((inByte = is.read()) != -1)
-          fos.write(inByte);
-        is.close();
-        fos.close();
-
+        copyInputStreamToFile(is, tempOut);
         Files.move(tempOut.toPath(), out.toPath());
-
       } catch (Exception e) {
-        log.error(e.getMessage());
-        try {
-          Thread.sleep(1000 * 60 * 5);
-        } catch (InterruptedException e1) {
-          // TODO Auto-generated catch block
-          e1.printStackTrace();
-        }
-        // try again?!
-        payload(httpClient, url, out);
+        log.error(url + ":" + e.getMessage());
       }
     }
 

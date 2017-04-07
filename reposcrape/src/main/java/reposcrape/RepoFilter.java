@@ -57,15 +57,8 @@ public class RepoFilter {
         //  log.info(entry.getName());
           if (entry.getName().endsWith("pom.xml")) {
             maven++;
-            break;
-          }
-          if (entry.getName().endsWith("ivy.xml")) {
-            ivy++;
-            break;
-          }
-          if (entry.getName().endsWith("built.xml")) {
+          }if (entry.getName().endsWith("build.xml")) {
             ant++;
-            break;
           }
           // InputStream stream = zipFile.getInputStream(entry);
         }
