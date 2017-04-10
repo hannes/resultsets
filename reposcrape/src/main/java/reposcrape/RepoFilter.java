@@ -46,6 +46,9 @@ public class RepoFilter {
     public void run() {
       log.debug(inputfile);
       total++;
+      if (total % 1000 == 0) {
+        log.info(matches + " / " + total);
+      }
       try {
         ZipFile zipFile = new ZipFile(inputfile);
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
