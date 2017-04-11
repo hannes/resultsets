@@ -126,7 +126,7 @@ public class RepoBuilder {
         // try running mvn install, use chroot to contain possible fallout
         pr = rt.exec(
             "fakechroot chroot " + reporoot
-                + " mvn --no-snapshot-updates -Dmaven.repo.local=/export/scratch1/home/hannes/resultsets/reposcrape/mavenrepo -Dmaven.test.skip=true -Djava.net.preferIPv4Stack=true install ",
+                + " mvn --no-snapshot-updates -Dmaven.repo.local=/export/scratch1/home/hannes/resultsets/reposcrape/mavenrepo -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Djava.net.preferIPv4Stack=true --batch-mode install ",
             new String[] {
                 "FAKECHROOT_EXCLUDE_PATH=/bin:/usr:/etc:/proc:/export/scratch1/home/hannes/resultsets/reposcrape/mavenrepo" });
         if (pr.waitFor() != 0) {
@@ -159,7 +159,8 @@ public class RepoBuilder {
   }
 
   public void retrieve() {
-    BlockingQueue<Runnable> taskQueue = new LinkedBlockingDeque<Runnable>(10000);
+    BlockingQueue<Runnable> taskQueue = new LinkedBlockingDeque<Runnable>(
+        10000);
     ExecutorService ex = new ThreadPoolExecutor(threads, threads,
         Integer.MAX_VALUE, TimeUnit.DAYS, taskQueue,
         new ThreadPoolExecutor.DiscardPolicy());
