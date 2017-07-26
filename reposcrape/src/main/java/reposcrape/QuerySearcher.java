@@ -2,12 +2,12 @@ package reposcrape;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -16,6 +16,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -26,7 +29,11 @@ import com.martiansoftware.jsap.JSAP;
 import com.martiansoftware.jsap.JSAPException;
 import com.martiansoftware.jsap.JSAPResult;
 
-public class RepoBuilder {
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+
+public class QuerySearcher {
   private String outputDir;
   private String inputDir;
   private int threads;
@@ -34,9 +41,9 @@ public class RepoBuilder {
   public int success;
   public int total;
 
-  private static Logger log = Logger.getLogger(RepoBuilder.class);
-
-  public RepoBuilder(String inputDir, String outputDir, int threads) {
+  private static Logger log = Logger.getLogger(QuerySearcher.class);
+  
+  public QuerySearcher(String inputDir, String outputDir, int threads) {
     this.inputDir = inputDir;
     this.threads = threads;
     this.outputDir = outputDir;
@@ -67,131 +74,141 @@ public class RepoBuilder {
       }
       return "";
     }
+    
+    private String remove_unmatched_bracket(String in) {
+      char[] chars = in.toCharArray();
+      int open = 0;
+      int end = in.length();
+      for (int i = 0; i < chars.length; i++) {
 
-    public void run() {
-      log.debug(inputfile);
-      boolean isMaven = false;
-      Runtime rt = Runtime.getRuntime();
-      Path t = null;
-      File failfile = null;
-      Process pr = null;
-      total++;
-      if (total % 10 == 0) {
-        log.info("Total: " + total + ", Attempts: " + attempts + ", Success: "
-            + success);
+        if (chars[i] == '(') {
+          open++;
+          continue;
+        }
+        if (chars[i] == ')') {
+          if (open == 0) {
+            end = i;
+            break;
+          }
+          open--;
+          continue;
+        }
       }
+      return in.substring(0, end);
+    }
+    
+    private String remove_unmatched_quote(String in) {
+      char[] chars = in.toCharArray();
+      boolean open = false;
+      int end = in.length();
+      for (int i = 0; i < chars.length; i++) {
+
+        if (chars[i] == '"') {
+          open = !open;
+          end = i;
+        }
+      }
+      if (open) {
+        return in.substring(0, end);
+      }
+      return in;
+    }
+    
+    public void run() {
+      ZipFile zipFile = null;
+      File resultFile = null;
+      File failFile = null;
+   
+      OutputStream os = null;
       try {
-        File resultdir = Paths
+        resultFile = Paths
             .get(outputDir,
-                inputfile.getName().replace(".zip", ""))
+                inputfile.getName().replace(".zip", ".sql"))
             .toFile();
         
-        failfile = Paths
+        failFile = Paths
             .get(outputDir,
                 inputfile.getName().replace(".zip", ".fail"))
             .toFile();
         
-        if (resultdir.exists() || failfile.exists()) {
+        if (resultFile.exists() || failFile.exists()) {
           return;
         }
         
         if (inputfile.length() > 524288000) { // 500 MB max...
           return;
         }
+        
+        Pattern p = Pattern.compile("(SELECT\\s[^;]+\\sFROM\\s[^;]+)", Pattern.CASE_INSENSITIVE); 
+        
+        os = new FileOutputStream(resultFile);
 
         // check if the file has maven pom.xml in root dir
-        ZipFile zipFile = new ZipFile(inputfile);
+        zipFile = new ZipFile(inputfile);
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
         while (entries.hasMoreElements()) {
           ZipEntry entry = entries.nextElement();
           // log.info(entry.getName());
-          if (entry.getName().matches("[^/]+/pom.xml")) {
-            isMaven = true;
-            break;
+          if (!entry.getName().matches(".*\\.java$")) {
+            continue;
+          }
+          InputStream is = zipFile.getInputStream(entry);
+          String fileData = streamToString(is);
+          is.close();
+
+          Matcher m = p.matcher(fileData);
+          while (m.find()) {
+            total++;
+            log.debug(entry.getName());
+            String cleaned_query = m.group(1).replaceAll("\n", " ").replaceAll("\\s+", " ").replaceAll("\"\\s*\\+\\s*\"", "").trim();
+            cleaned_query = remove_unmatched_bracket(cleaned_query);
+            cleaned_query = remove_unmatched_quote(cleaned_query);
+            cleaned_query = cleaned_query.replaceAll("\"\\s*[+][^+]+[+]\\s*\"", " ? ");
+            cleaned_query = cleaned_query.replaceAll("[\\\\]?[`\"']%[.a-z0-9]+[\\\\]?[`\"']", " ? ");
+            cleaned_query = cleaned_query.replaceAll("%[.a-z0-9]+", " ? ");
+            cleaned_query = cleaned_query.replaceAll(":\\w+", " ? ");
+            
+            try {
+              Statement stmt = CCJSqlParserUtil.parse(cleaned_query);
+              success++;
+              os.write(cleaned_query.getBytes());
+              os.write('\n');
+            }
+            catch (JSQLParserException e) {
+             // System.out.println(cleaned_query);
+             // System.out.println(e.getCause().getMessage());
+            }      
           }
         }
-        // TODO: look for test cases here, too?
+        os.close();
         zipFile.close();
-        if (!isMaven) {
-          return;
-        }
-        attempts++;
-
-        log.debug(inputfile);
-
-        // unzip into temp folder
-        t = Files.createTempDirectory("repobuilder-tempdir");
-        pr = rt.exec("unzip -q " + inputfile + " -d " + t);
-        if (pr.waitFor() != 0) {
-          throw new RuntimeException(
-              "unzip failed " + streamToString(pr.getErrorStream()) + " "
-                  + streamToString(pr.getInputStream()));
-        }
-        pr.destroy();
-        File reporoot = null;
-        for (File f : t.toFile().listFiles()) {
-          if (f.isDirectory() && f.getName().contains("master")) {
-            reporoot = f;
-            break;
-          }
-        }
-        if (reporoot == null) {
-          throw new RuntimeException("could not find repo root");
-        }
-
-        // try running mvn install, use chroot to contain possible fallout
-//        pr = rt.exec(
-//            "fakechroot chroot " + reporoot
-//                + " mvn --no-snapshot-updates -Dmaven.repo.local=/export/scratch1/home/hannes/reposcrape/mavenrepo -Dtrust_all_cert=true -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Djava.net.preferIPv4Stack=true --batch-mode install ",
-//            new String[] {
-//                "FAKECHROOT_EXCLUDE_PATH=/bin:/usr:/etc:/proc:/export/scratch1/home/hannes/reposcrape/mavenrepo", "MAVEN_OPTS=-Xmx1g" });
-
-        
-        pr = rt.exec(
-          "mvn --no-snapshot-updates -Dmaven.repo.local=/export/scratch1/home/hannes/reposcrape/mavenrepo -Dtrust_all_cert=true -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -Djava.net.preferIPv4Stack=true --batch-mode install test",
-          new String[] {"MAVEN_OPTS=-Xmx1g" }, reporoot);
-
-            
-            
-        if (!pr.waitFor(10, TimeUnit.MINUTES)) {
-          throw new RuntimeException("timeout");
-        }
-        if (pr.exitValue() != 0) {
-          throw new RuntimeException(
-              "build failed " + streamToString(pr.getErrorStream()) + " "
-                  + streamToString(pr.getInputStream()));
-        }
-        pr.destroy();
-        success++;
-        log.debug("success on " + inputfile);
-        
-        pr = rt.exec("cp -r  " + reporoot + " " + resultdir);
-        pr.waitFor();
-        pr.destroy();
-                
-
       } catch (Exception e) {
-        log.debug(inputfile + ": " + e.getMessage() + " " + e.getClass().toString());
-        if (failfile != null) {
-          try {
-            failfile.createNewFile();
-          } catch (IOException e1) {
-          }
-        }
+        log.info(inputfile + ": " + e.toString());
         
-        if (t != null) {
-          try {
-            // clean up
-            pr = rt.exec("rm -rf  " + t);
-            pr.waitFor();
-            pr.destroy();
-          } catch (Exception e1) {
-            e.printStackTrace();
+        try {
+          if (resultFile != null) {
+            resultFile.delete();
           }
-        }
-        if (pr != null) {
-          pr.destroy();
-        }
+        } catch (Exception e2) {}
+        
+        
+        try {
+          if (failFile != null) {
+            failFile.createNewFile();
+          }
+        } catch (Exception e2) {}
+        
+        try {
+          if (zipFile != null) {
+            zipFile.close();
+          }
+        } catch (Exception e2) {}
+        
+        try {
+          if (os != null) {
+            os.close();
+          }
+        } catch (Exception e2) {}
       }
 
     }
@@ -227,6 +244,11 @@ public class RepoBuilder {
     } catch (InterruptedException e) {
       // ok
     }
+    
+    System.out.println("total=" + total);
+
+    System.out.println("success=" + success);
+
   }
 
   public static void main(String[] args) throws JSAPException {
@@ -256,8 +278,9 @@ public class RepoBuilder {
           "Usage: " + jsap.getUsage() + "\nParameters: " + jsap.getHelp());
       System.exit(-1);
     }
-    new RepoBuilder(res.getString("input"), res.getString("output"),
+    new QuerySearcher(res.getString("input"), res.getString("output"),
         res.getInt("threads")).retrieve();
+    
   }
 
 }
