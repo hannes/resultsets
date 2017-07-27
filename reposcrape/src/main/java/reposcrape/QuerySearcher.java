@@ -139,6 +139,13 @@ public class QuerySearcher {
           return;
         }
         
+        String fname = inputfile.getName().replace(".zip", "");
+        int firstsplit = fname.indexOf("__");
+        int secondsplit = fname.indexOf("__", firstsplit + 2);
+        String outprefix = fname.substring(0, firstsplit) + "\t" + fname.substring(firstsplit+2, secondsplit) + "\t" + fname.substring(secondsplit + 2) + "\t";
+        
+        
+        
         Pattern p = Pattern.compile("(SELECT\\s[^;]+\\sFROM\\s[^;]+)", Pattern.CASE_INSENSITIVE); 
         
         os = new FileOutputStream(resultFile);
@@ -171,6 +178,11 @@ public class QuerySearcher {
             try {
               Statement stmt = CCJSqlParserUtil.parse(cleaned_query);
               success++;
+              
+              os.write(outprefix.getBytes());
+              String jfname = entry.getName();
+              os.write(jfname.substring(jfname.indexOf('/')).getBytes());
+              os.write('\t');
               os.write(cleaned_query.getBytes());
               os.write('\n');
             }
